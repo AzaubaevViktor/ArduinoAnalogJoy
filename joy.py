@@ -5,6 +5,8 @@ import time
 
 import struct
 
+import subprocess
+
 from interval import *
 
 
@@ -175,6 +177,24 @@ class JoyMouse(Joy):
     RELATIVE_MODE = 0
     ABSOLUTE_MODE = 1
 
-    def __init__(self, file, speed, mode=RELATIVE_MODE):
-        super(JoyMouse, self).__init__(file, speed)
+    def __init__(self, file, speed, config_file=None, mode=RELATIVE_MODE, screen_size=None):
+        super(JoyMouse, self).__init__(file, speed, config_file=config_file)
+        self.screen_size = screen_size or (1920, 1080)
         self.mode = mode
+
+    def step(self):
+        xPos, yPos, act, sec = self.get_data()
+
+        param = "mousemove" + "_relative" if self.mode == self.RELATIVE_MODE else ""
+
+        paramX = xPos
+        paramY = yPos
+
+        if self.mode == self.RELATIVE_MODE:
+            paramX *= 10
+            paramY *= 10
+
+            paramX **= 3
+            paramY **= 3
+
+        subprocess.call(["xdotool", param, "--", str(int(paramX)), str(int(paramY))])

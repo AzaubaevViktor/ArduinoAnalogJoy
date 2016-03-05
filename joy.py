@@ -35,7 +35,9 @@ class Joy:
     xRaw 2b, yRaw 2b, xVal b, yVal b, actBtn 1b, secBtn 1b
     """
 
-    _FMT = ">hhbb??"
+    _PROTOCOL_VERSION = b'b'
+
+    _FMT = ">hhbbB"
     _center = None
     _center_x_interval = None
     _center_y_interval = None
@@ -50,7 +52,7 @@ class Joy:
         time.sleep(4)
 
         readByte = self.arduino.read()
-        if readByte != b'X':
+        if readByte != self._PROTOCOL_VERSION:
             raise RuntimeError("Joy Protocol error")
 
         try:
@@ -165,12 +167,12 @@ class Joy:
         return data
 
     def get_data(self):
-        xV, yV, _, _, act, sec = self._get_raw_data()
+        xV, yV, _, _, btn_mask = self._get_raw_data()
 
         xPos = calc_f(self._x_interval, self._center_x_interval, getRbyADC(xV))
         yPos = calc_f(self._y_interval, self._center_y_interval, getRbyADC(yV))
 
-        return xPos, yPos, act, sec
+        return xPos, yPos, btn_mask
 
 
 class JoyMouse(Joy):
@@ -181,6 +183,7 @@ class JoyMouse(Joy):
         super(JoyMouse, self).__init__(file, speed, config_file=config_file)
         self.screen_size = screen_size or (1920, 1080)
         self.mode = mode
+        self._old_btn_mask = 0
 
     def _mouse(self, xPos, yPos):
         param = "mousemove" + "_relative" if self.mode == self.RELATIVE_MODE else ""
@@ -195,23 +198,53 @@ class JoyMouse(Joy):
             paramX **= 3
             paramY **= 3
 
-        subprocess.call(["xdotool", param, "--", str(int(paramX)), str(int(paramY))])
+        return [param, "--", str(int(paramX)), str(int(paramY))]
 
-    def _keys(self, act, sec):
-        if act:
-            subprocess.call(["xdotool", "mousedown", "1"])
-        else:
-            subprocess.call(["xdotool", "mouseup", "1"])
+    def _keys(self, btnMask):
+        actions = []
 
-        if sec:
-            subprocess.call(["xdotool", "mousedown", "3"])
+        if btnMask >> 6 & 1:
+            actions += ["mousedown", "1"]
         else:
-            subprocess.call(["xdotool", "mouseup", "3"])
+            actions += ["mouseup", "1"]
+
+        if btnMask >> 5 & 1:
+            actions += ["mousedown", "3"]
+        else:
+            actions += ["mouseup", "3"]
+
+        if btnMask >> 0 & 1:
+            actions += ["keydown", "Right"]
+        else:
+            actions += ["keyup", "Right"]
+
+        if btnMask >> 1 & 1:
+            actions += ["keydown", "Up"]
+        else:
+            actions += ["keyup", "Up"]
+
+        if btnMask >> 2 & 1:
+            actions += ["keydown", "Left"]
+        else:
+            actions += ["keyup", "Left"]
+
+        if btnMask >> 3 & 1:
+            actions += ["keydown", "Down"]
+        else:
+            actions += ["keyup", "Down"]
+
+        return actions
 
     def step(self):
-        xPos, yPos, act, sec = self.get_data()
+        xPos, yPos, btnMask = self.get_data()
 
-        self._mouse(xPos, yPos)
+        actions = ["xdotool"]
 
-        self._keys(act, sec)
+        actions += self._mouse(xPos, yPos)
+
+        actions += self._keys(btnMask)
+
+        subprocess.call(actions)
+
+        print(" ".join(actions))
 

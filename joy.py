@@ -178,6 +178,14 @@ class Joy:
 class JoyMouse(Joy):
     RELATIVE_MODE = 0
     ABSOLUTE_MODE = 1
+    _BTN_ASSOC = {
+        0: ("key", "Right"),
+        1: ("key", "Up"),
+        2: ("key", "Left"),
+        3: ("key", "Down"),
+        5: ("mouse", "3"),
+        6: ("mouse", "1"),
+    }
 
     def __init__(self, file, speed, config_file=None, mode=RELATIVE_MODE, screen_size=None):
         super(JoyMouse, self).__init__(file, speed, config_file=config_file)
@@ -198,53 +206,34 @@ class JoyMouse(Joy):
             paramX **= 3
             paramY **= 3
 
-        return [param, "--", str(int(paramX)), str(int(paramY))]
+        paramX = int(paramX)
+        paramY = int(paramY)
+        if not (paramX == paramY == 0):
+            return [param, "--", str(paramX), str(paramY)]
+        else:
+            return []
 
     def _keys(self, btnMask):
         actions = []
 
-        if btnMask >> 6 & 1:
-            actions += ["mousedown", "1"]
-        else:
-            actions += ["mouseup", "1"]
+        for k, (tp, val) in self._BTN_ASSOC.items():
+            newVal = btnMask >> k & 1
+            if newVal != (self._old_btn_mask >> k & 1):
+                actions += [tp + ("down" if newVal else "up"), val]
 
-        if btnMask >> 5 & 1:
-            actions += ["mousedown", "3"]
-        else:
-            actions += ["mouseup", "3"]
-
-        if btnMask >> 0 & 1:
-            actions += ["keydown", "Right"]
-        else:
-            actions += ["keyup", "Right"]
-
-        if btnMask >> 1 & 1:
-            actions += ["keydown", "Up"]
-        else:
-            actions += ["keyup", "Up"]
-
-        if btnMask >> 2 & 1:
-            actions += ["keydown", "Left"]
-        else:
-            actions += ["keyup", "Left"]
-
-        if btnMask >> 3 & 1:
-            actions += ["keydown", "Down"]
-        else:
-            actions += ["keyup", "Down"]
+        self._old_btn_mask = btnMask
 
         return actions
 
     def step(self):
         xPos, yPos, btnMask = self.get_data()
 
-        actions = ["xdotool"]
-
-        actions += self._mouse(xPos, yPos)
+        actions = self._mouse(xPos, yPos)
 
         actions += self._keys(btnMask)
 
-        subprocess.call(actions)
+        if actions:
+            subprocess.call(["xdotool"] + actions)
+            print(" ".join(actions))
 
-        print(" ".join(actions))
 

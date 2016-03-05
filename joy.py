@@ -182,9 +182,7 @@ class JoyMouse(Joy):
         self.screen_size = screen_size or (1920, 1080)
         self.mode = mode
 
-    def step(self):
-        xPos, yPos, act, sec = self.get_data()
-
+    def _mouse(self, xPos, yPos):
         param = "mousemove" + "_relative" if self.mode == self.RELATIVE_MODE else ""
 
         paramX = xPos
@@ -198,3 +196,22 @@ class JoyMouse(Joy):
             paramY **= 3
 
         subprocess.call(["xdotool", param, "--", str(int(paramX)), str(int(paramY))])
+
+    def _keys(self, act, sec):
+        if act:
+            subprocess.call(["xdotool", "mousedown", "1"])
+        else:
+            subprocess.call(["xdotool", "mouseup", "1"])
+
+        if sec:
+            subprocess.call(["xdotool", "mousedown", "3"])
+        else:
+            subprocess.call(["xdotool", "mouseup", "3"])
+
+    def step(self):
+        xPos, yPos, act, sec = self.get_data()
+
+        self._mouse(xPos, yPos)
+
+        self._keys(act, sec)
+
